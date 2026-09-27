@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "c78bf0a9-9686-464b-acdc-6a12a5145dcc"
+      }
+    },
+    "android": {
+      "package": "com.eyecacat.workspace"
+    }
+  }
+}
