@@ -1,0 +1,24 @@
+kind = "mobile"
+previewPath = "/life-black-box/"
+title = "Life Black Box"
+description = "A Turkish emergency wearable companion app that monitors live vitals, manages emergency contacts, and guides the user through a safety-first alert flow using BLE or realistic demo data."
+version = "1.0.0"
+id = "artifacts/life-black-box"
+router = "expo-domain"
+
+[[services]]
+name = "expo"
+ensurePreviewReachable = "/status"
+paths = [ "/life-black-box/" ]
+localPort = 21913
+
+[services.development]
+run = "pnpm --filter @workspace/life-black-box run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/life-black-box", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/life-black-box", "run", "serve" ]
+
+[services.env]
+PORT = "21913"
+BASE_PATH = "/life-black-box/"

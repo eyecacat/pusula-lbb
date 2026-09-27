@@ -1,0 +1,1 @@
+- [Expo web font gate](expo-web-font-gate.md) — preserve native font gating but render a web fallback while fonts hydrate.

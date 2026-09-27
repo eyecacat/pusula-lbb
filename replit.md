@@ -1,6 +1,6 @@
-# [Project name]
+# Life Black Box
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A Turkish Expo companion app for a Deneyap Kart 1A health emergency wearable, with live vitals, demo BLE telemetry, emergency contacts, alerts, and local event history.
 
 ## Run & Operate
 
@@ -22,15 +22,22 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/life-black-box/app/` — Expo Router screens for the dashboard, history, contacts, settings, and emergency modal
+- `artifacts/life-black-box/context/AppContext.tsx` — shared telemetry, persistence, connection, and emergency state
+- `artifacts/life-black-box/services/` — BLE protocol, AsyncStorage, SMS, and first-aid speech
+- `artifacts/life-black-box/constants/` — thresholds and the dark/light Life Black Box palette
+- `artifacts/life-black-box/README.md` — run instructions and BLE protocol reference
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Demo telemetry is enabled by default so the entire emergency flow can be exercised without hardware.
+- AsyncStorage is the source of truth for contacts, events, settings, and the local user profile; events are capped at 200 records.
+- BLE is lazy-loaded and isolated behind the Nordic UART service so Expo Go/web previews remain usable while hardware builds can disable demo mode.
+- Emergency SMS falls back to clipboard when SMS is unavailable, and first-aid guidance uses Turkish device speech when no audio asset is bundled.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+The app monitors heart rate, SpO2, acceleration, temperature, humidity, and CO; shows a live heart-rate trend; provides a 10-second confirmation countdown; sends emergency SMS to up to five contacts; logs full sensor snapshots; and supports 112 call handoff.
 
 ## User preferences
 

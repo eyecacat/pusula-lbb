@@ -1,0 +1,301 @@
+Create a complete React Native mobile app using Expo SDK 51 (managed workflow) 
+for a health emergency wearable system called "Life Black Box".
+The app communicates with a Deneyap Kart 1A (ESP32-S3) over BLE using the 
+Nordic UART Service UUID: 6E400001-B5A3-F393-E0A9-E50E24DCCA9E.
+
+────────────────────────────────────────────
+TECH STACK
+────────────────────────────────────────────
+- Expo SDK 51, React Native
+- expo-router (file-based routing, tabs layout)
+- react-native-ble-plx (BLE communication)
+- expo-notifications (local + push notifications)
+- expo-sms (emergency SMS)
+- expo-av (audio playback for first-aid guidance)
+- react-native-reanimated (animations)
+- react-native-gifted-charts (line charts for vitals history)
+- AsyncStorage (@react-native-async-storage/async-storage)
+- react-native-paper (UI components)
+- date-fns (timestamp formatting)
+- expo-keep-awake (screen stays on during monitoring)
+
+────────────────────────────────────────────
+APP STRUCTURE (expo-router tabs)
+────────────────────────────────────────────
+
+app/
+  _layout.tsx              ← Root layout, providers
+  (tabs)/
+    _layout.tsx            ← Bottom tab navigator
+    index.tsx              ← Dashboard (Ana Sayfa)
+    history.tsx            ← Event log / history
+    contacts.tsx           ← Emergency contacts
+    settings.tsx           ← App settings
+  emergency.tsx            ← Full-screen emergency modal (stack, no tab)
+
+components/
+  VitalCard.tsx            ← Reusable card: icon + value + status color
+  HeartRateChart.tsx       ← Scrollable line chart (last 60 readings)
+  BleStatusBar.tsx         ← Connection indicator + battery %
+  EmergencyCountdown.tsx   ← Animated 10-second countdown ring
+
+services/
+  bleService.ts            ← BLE scan, connect, parse incoming JSON
+  alertService.ts          ← Risk detection logic, SMS dispatch
+  storageService.ts        ← AsyncStorage: events, contacts, settings
+  audioService.ts          ← Play first-aid voice guidance clips
+
+constants/
+  thresholds.ts            ← HR_LOW=45, HR_HIGH=130, SPO2_LOW=90, CO_THRESHOLD=300
+  colors.ts                ← Design tokens (dark-friendly palette)
+
+────────────────────────────────────────────
+BLE PROTOCOL
+────────────────────────────────────────────
+
+Device name to scan for: "LifeBlackBox"
+Service UUID:    6E400001-B5A3-F393-E0A9-E50E24DCCA9E
+Notify UUID:     6E400003-B5A3-F393-E0A9-E50E24DCCA9E  (device → app)
+Write UUID:      6E400002-B5A3-F393-E0A9-E50E24DCCA9E  (app → device)
+
+Incoming JSON from device (parse every 1 second):
+{
+  "hr": 72,       // heart rate bpm (int)
+  "spo2": 98,     // SpO2 % (int)
+  "acc": 1.02,    // total acceleration in g (float)
+  "temp": 36.5,   // ambient temperature °C (float)
+  "hum": 45,      // humidity % (int)
+  "co": 120,      // CO sensor raw ADC value (int)
+  "fall": false,  // fall detected bool
+  "state": 0      // 0=NORMAL, 1=CONFIRM_WAIT, 2=ALERT_SENT
+}
+
+Special incoming packet for emergency:
+{ "ALARM": "ACIL_SOS" }
+
+Outgoing command to cancel alert:
+Write single byte 'C' to Write characteristic
+
+────────────────────────────────────────────
+SCREEN 1 — DASHBOARD (index.tsx)
+────────────────────────────────────────────
+
+Top section:
+- BleStatusBar: show "LifeBlackBox ●" green when connected, 
+  red "Bağlantı Yok" with retry button when disconnected
+- Battery % from "state" field inference (future-proof slot)
+
+Vitals grid (2x3 cards using VitalCard component):
+┌─────────────┬─────────────┐
+│ ❤️ Kalp Atışı│ 🩸 SpO2     │
+│  72 bpm     │  98 %       │
+├─────────────┼─────────────┤
+│ ⚡ İvme      │ 🌡️ Sıcaklık │
+│  1.02 g     │  36.5 °C   │
+├─────────────┼─────────────┤
+│ 💧 Nem       │ ☁️ CO Gaz   │
+│  45 %       │  Düşük      │
+└─────────────┴─────────────┘
+
+Card color logic:
+- GREEN  = all values normal
+- YELLOW = value approaching threshold (HR < 55 or > 110, SpO2 < 94, CO > 200)
+- RED    = threshold exceeded (HR < 45 or > 130, SpO2 < 90, CO > 300)
+- PURPLE = fall detected (acc > 2.5g)
+
+Below grid:
+- HeartRateChart: line chart of last 60 HR readings, scrollable,
+  horizontal red dashed lines at 45 and 130 bpm
+- System status pill: "NORMAL ✓" / "ONAY BEKLENİYOR ⚠️" / "ACİL DURUM 🆘"
+  colored accordingly, pulsing animation when not NORMAL
+
+Large SOS button at bottom:
+- Red circle button "ACİL SOS"
+- On press: immediately trigger emergency flow (same as device alarm)
+
+────────────────────────────────────────────
+EMERGENCY FLOW (emergency.tsx — full screen modal)
+────────────────────────────────────────────
+
+Triggered when:
+  a) device sends { "ALARM": "ACIL_SOS" } packet
+  b) state field becomes 1 (CONFIRM_WAIT) → show countdown
+  c) user taps SOS button manually
+
+Screen layout:
+- Dark red background, white text
+- Top: large animated warning icon (pulsing red triangle ⚠️)
+- Title: "ACİL DURUM ALGILANDI"
+- Detected reason (e.g. "Düşme Algılandı + Düşük SpO2 Tespit Edildi")
+- EmergencyCountdown ring: 10-second animated circular countdown
+  → while counting: phone vibrates every 2 seconds, plays alert sound
+- Two large buttons:
+    [✓ Ben İyiyim — İptal Et]   → writes 'C' to BLE, dismiss screen
+    [🆘 Yardım Çağır]           → skip countdown, trigger immediately
+- If countdown reaches 0 OR user taps "Yardım Çağır":
+    1. Send SMS to all emergency contacts (expo-sms):
+       "ACİL: [userName] sağlık durumu kritik. Konum: [timestamp]. 
+        Life Black Box sistemi otomatik alarm verdi. Lütfen hemen arayın."
+    2. Show "Mesaj Gönderildi ✓" confirmation per contact
+    3. Play audio: first-aid guidance based on detected event type
+       - fall → "Düşme_ilkYardim.mp3" 
+       - low HR / SpO2 → "Kardiyak_ilkYardim.mp3"
+       - CO → "KarbonMonoksit_ilkYardim.mp3"
+       (use placeholder audio or TTS if files not available)
+    4. Log event to AsyncStorage with full sensor snapshot
+    5. Show post-alert screen: event summary + "Ambulans Çağır" button 
+       that opens tel:112
+
+────────────────────────────────────────────
+SCREEN 2 — EVENT HISTORY (history.tsx)
+────────────────────────────────────────────
+
+FlatList of all logged events from AsyncStorage, newest first.
+
+Each row shows:
+- Colored left border (RED=alert sent, YELLOW=user cancelled, GREEN=normal log)
+- Event type icon + Turkish label
+  RISK_ALGILANDI     → ⚠️ "Risk Algılandı"
+  KULLANICI_IPTAL    → ✅ "Kullanıcı İptal Etti"
+  ALARM_GONDERILDI   → 🆘 "Alarm Gönderildi"
+- Timestamp (formatted as "27 Eyl 2026 — 14:32")
+- Sensor snapshot: HR, SpO2, Acc, Temp values in small chips
+- Expand chevron → opens detail modal with full JSON
+
+Top bar:
+- "Geçmiş Temizle" button (confirms before clearing)
+- Export button → generates plain text summary, shares via expo-sharing
+
+────────────────────────────────────────────
+SCREEN 3 — EMERGENCY CONTACTS (contacts.tsx)
+────────────────────────────────────────────
+
+List of saved contacts, each card shows:
+- Name, phone number, relationship (Eş / Çocuk / Bakıcı / Diğer)
+- "Test Mesajı Gönder" button → sends single test SMS
+- Delete (swipe or trash icon)
+
+FAB (+) button to add new contact:
+- Form: Ad Soyad, Telefon, Yakınlık (Picker)
+- Saved to AsyncStorage contacts array
+- Max 5 contacts enforced with friendly warning
+
+Also on this screen:
+- "Varsayılan Kullanıcı Adı" text field 
+  (used in SMS: "ACİL: [userName]...")
+- Toggle: "112'yi de bildir" 
+  (if ON, after SMS also opens tel:112 automatically)
+
+────────────────────────────────────────────
+SCREEN 4 — SETTINGS (settings.tsx)
+────────────────────────────────────────────
+
+Sections:
+
+[BLE Bağlantısı]
+- "Cihaz Tara" button → starts BLE scan, lists found devices
+- Current device name + MAC address display
+- "Bağlantıyı Kes" button
+
+[Uyarı Eşikleri]  (all editable, with reset-to-default)
+- Kalp Atışı Alt Sınır: 45 bpm
+- Kalp Atışı Üst Sınır: 130 bpm
+- SpO2 Alt Sınır: 90 %
+- CO Alarm Değeri: 300
+- Onay Süresi: 10 saniye (5–30 range slider)
+
+[Bildirimler]
+- Toggle: Yerel bildirimler (expo-notifications)
+- Toggle: Titreşim uyarısı
+- Toggle: Sesli alarm
+
+[Uygulama]
+- Tema: Açık / Koyu / Otomatik
+- Dil: Türkçe (default, only option for now)
+- Versiyon: 1.0.0
+
+────────────────────────────────────────────
+DESIGN SYSTEM
+────────────────────────────────────────────
+
+Color palette (dark mode primary, light mode supported):
+- Background:    #0D1117
+- Surface:       #161B22
+- Card:          #1C2128
+- Primary:       #2EA043 (green — normal state)
+- Warning:       #D29922 (yellow)
+- Danger:        #DA3633 (red)
+- Critical:      #8957E5 (purple — fall)
+- Text primary:  #E6EDF3
+- Text secondary:#8B949E
+- Border:        #30363D
+
+Typography:
+- Headers: bold, 20–28px
+- Vital values: bold, 36px, monospace font
+- Labels: regular, 12–14px, secondary color
+
+All cards: border-radius 12, subtle shadow, 
+padding 16, margin 8
+
+Animations:
+- Pulsing red glow on danger cards (Reanimated)
+- Countdown ring: Animated.Value arc from 360° to 0°
+- BLE connecting: rotating dots indicator
+- Card state transitions: smooth color interpolation 300ms
+
+────────────────────────────────────────────
+DATA PERSISTENCE (AsyncStorage keys)
+────────────────────────────────────────────
+
+"lbb_contacts"    → JSON array of emergency contacts
+"lbb_events"      → JSON array of event logs (max 200, FIFO)
+"lbb_settings"    → JSON object of all threshold/notification settings
+"lbb_user"        → JSON object { name, deviceName, deviceId }
+
+────────────────────────────────────────────
+ERROR HANDLING & EDGE CASES
+────────────────────────────────────────────
+
+- BLE permission denied → show permission rationale screen 
+  with step-by-step guide (Android: BLUETOOTH_SCAN + BLUETOOTH_CONNECT)
+- BLE disconnected mid-session → auto-reconnect every 5 seconds, 
+  show "Yeniden Bağlanıyor..." banner, do NOT trigger false alarm
+- No emergency contacts → block SOS send, show "Acil kişi eklenmedi" 
+  warning with direct link to Contacts screen
+- Invalid/NaN sensor values → show "--" placeholder, skip anomaly check 
+  for that reading only
+- SMS unavailable (iPhone restrictions or no SIM) → show warning 
+  + copy-to-clipboard fallback with pre-filled message
+
+────────────────────────────────────────────
+REPLIT SETUP NOTES
+────────────────────────────────────────────
+
+- Initialize with: npx create-expo-app LifeBlackBox --template blank-typescript
+- Use Expo Go for testing on physical device (Android preferred for BLE dev)
+- Add to app.json plugins: ["expo-notifications", "react-native-ble-plx"]
+- In app.json android.permissions add:
+  "BLUETOOTH", "BLUETOOTH_ADMIN", "BLUETOOTH_SCAN", 
+  "BLUETOOTH_CONNECT", "ACCESS_FINE_LOCATION",
+  "SEND_SMS", "VIBRATE"
+- package.json scripts: "start": "expo start --tunnel" (for Replit)
+- Create mock BLE data mode (constant "DEMO_MODE = true" in bleService.ts) 
+  that simulates incoming JSON packets every second with realistic 
+  fluctuating values — so the app can be fully tested without hardware
+
+────────────────────────────────────────────
+DELIVERABLES CHECKLIST
+────────────────────────────────────────────
+
+[ ] All 4 tab screens fully implemented with real logic (no placeholder TODO)
+[ ] Emergency modal with countdown, SMS, and audio
+[ ] BLE service with parse + write + auto-reconnect
+[ ] Demo mode with simulated sensor data
+[ ] AsyncStorage persistence for contacts, events, settings
+[ ] Dark mode UI matching the design system above
+[ ] Turkish strings throughout (all user-facing text in Turkish)
+[ ] No TypeScript errors
+[ ] README.md with setup steps and BLE protocol reference
+
+Build this complete application now.

@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "Life Black Box",
+    "slug": "life-black-box",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "life-black-box",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": false
+    },
+    "splash": {
+      "backgroundColor": "#0D1117",
+      "image": "./assets/images/icon.png",
+      "resizeMode": "contain"
+    },
+    "android": {
+      "permissions": [
+        "BLUETOOTH",
+        "BLUETOOTH_ADMIN",
+        "BLUETOOTH_SCAN",
+        "BLUETOOTH_CONNECT",
+        "ACCESS_FINE_LOCATION",
+        "SEND_SMS",
+        "VIBRATE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": ["expo-router", "expo-notifications", "react-native-ble-plx"],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
